@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Specify the directories to monitor (replace with your actual directories)
+DIRECTORIES=(
+    "/Volume1/XXXX/XXXXX"
+)
+
+# Specify the Slack webhook URL
+SLACK_WEBHOOK_URL="XXXXXX"
+
+# Function to send notification to Slack
+send_slack_notification() {
+    local message="$1"
+    curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"$message\"}" "$SLACK_WEBHOOK_URL" > /dev/null
+}
+
+# Function to process files in a directory
+process_files_in_directory() {
+    local DIRECTORY="$1"
+    # Loop through each file in the directory and its subdirectories
+    find "$DIRECTORY" -type f \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' -o -name '*.gif' \) -print0 | while IFS= read -r -d '' FILE_PATH; do
+        process_file "$FILE_PATH"
+    done
+}
+
+# Function to process files
+process_file() {
+    local FILE_PATH="$1"
+    local FILE_NAME=$(basename -- "$FILE_PATH")
+    local FILE_NAME_NO_EXT="${FILE_NAME%.*}"
+    local PARENT_FOLDER=$(basename "$(dirname "$FILE_PATH")")
+    
+    # Check if the file name matches the parent folder name
+    if [ "$FILE_NAME_NO_EXT" = "$PARENT_FOLDER" ]; then
+        # Get the file extension
+        local EXTENSION="${FILE_NAME##*.}"
+        
+        # Rename the file to "poster.<extension>"
+        local NEW_FILE_NAME="poster.$EXTENSION"
+        mv "$FILE_PATH" "$(dirname "$FILE_PATH")/$NEW_FILE_NAME"
+
+        # Log the renaming action
+        echo "Renamed file: $FILE_NAME to $NEW_FILE_NAME"
+
+        # Send Slack notification
+        send_slack_notification "Renamed file: $FILE_NAME to $NEW_FILE_NAME"
+    fi
+}
+
+# Loop through each directory
+for DIRECTORY in "${DIRECTORIES[@]}"; do
+    process_files_in_directory "$DIRECTORY"
+done
